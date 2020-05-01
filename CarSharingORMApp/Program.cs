@@ -11,6 +11,11 @@ using System.Threading;
 
 namespace CarSharingORMApp
 {
+    enum result_code
+    {
+        Complete,
+        Failed
+    }
     enum status
     {
         Active,
@@ -28,19 +33,28 @@ namespace CarSharingORMApp
     {
         private static MySqlConnection currentConnection;
         private const string ConnectionString = "server = 192.168.190.130; port=3306;username=student;password=123;database=app_schema";
-        private static User currentUser = new UnregistredUser();
+        private static User currentUser = new Admin(0, 0, 0) { RoleId = 2, Id = 0, StatusId = 0 }; //new UnregistredUser();
         private static bool isRunning = true;
+        private static int authCount = 0;
 
         static void Main(string[] args)
         {
-            Setup();
-            OpenConnection();
-            CheckConnection();
-            while (isRunning)
+            try
             {
-                Console.Write("> ");
-                HandleCommand(Console.ReadLine());
+                Setup();
+                OpenConnection();
+                CheckConnection();
+                while (isRunning)
+                {
+                    Console.Write("> ");
+                    HandleCommand(Console.ReadLine());
+                }
             }
+            catch(Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            Console.ReadLine();
         }
 
         private static void Setup()
@@ -55,7 +69,14 @@ namespace CarSharingORMApp
 
         private static void OpenConnection()
         {
-            currentConnection.Open();
+            try
+            {
+                currentConnection.Open();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
 
         private static void CloseConnection()
@@ -65,74 +86,164 @@ namespace CarSharingORMApp
 
         private static void UserAuthorization()
         {
-            Console.Write("login: ");
-            string userName = Console.ReadLine();
-            Console.Write("password: ");
+            Console.Write("  login: ");
+            string login = Console.ReadLine();
+            Console.Write("  password: ");
             string password = Console.ReadLine();
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "Authorize";
+
+            MySqlParameter Login = new MySqlParameter
+            {
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
+
+            MySqlParameter Password = new MySqlParameter
+            {
+                ParameterName = "Password",
+                MySqlDbType = MySqlDbType.Int32,
+                Value = int.Parse(password)
+            };
+            command.Parameters.Add(Password);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int16,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
 
             DataTable table = new DataTable();
             MySqlDataAdapter adapter = new MySqlDataAdapter();
-            MySqlCommand command = new MySqlCommand("SELECT * FROM `client` WHERE `login` = @uL AND `password` = @uP AND `status_id` = 0", currentConnection);
-            command.Parameters.Add("@uL", MySqlDbType.VarChar).Value = userName;
-            command.Parameters.Add("@uP", MySqlDbType.Int64).Value = long.Parse(password);
 
             adapter.SelectCommand = command;
             adapter.Fill(table);
+            Console.WriteLine("- Client status: {0}", command.Parameters["Result"].Value);
             if (table.Rows.Count != 0)
             {
+                UnLogging();
                 currentUser = ((UnregistredUser)currentUser).Authorize(table.Rows[0]["role_id"].ToString(), table.Rows[0]["status_id"].ToString(), table.Rows[0]["id"].ToString());
-                Console.WriteLine($"- Authorization complete -\nCurrent role: {(role)int.Parse(table.Rows[0]["role_id"].ToString())}\nCurrent status: {(status)int.Parse(table.Rows[0]["status_id"].ToString())}");
             }
             else
             {
-                Console.WriteLine("Authorization failed.");
+                if (authCount > 3)
+                {
+                    Console.WriteLine("- Login limit exceeded, wait 1 min to another attemp");
+                    authCount = 0;
+                    Thread.Sleep(100);
+                    Console.WriteLine("- 1 min left");
+                }
+                else
+                {
+                    authCount++;
+                }
             }
         }
 
         private static void UserRegistration()
         {
-            Console.Write("email: ");
+            Console.Write("$ email: ");
             string email = Console.ReadLine();
-            Console.Write("login: ");
+            Console.Write("$ login: ");
             string login = Console.ReadLine();
-            Console.Write("password: ");
+            Console.Write("$ password: ");
             string password = Console.ReadLine();
-            Console.Write("phone number: ");
+            Console.Write("$ phone number: ");
             string phone = Console.ReadLine();
+            Console.Write("$ first name: ");
+            string firstName = Console.ReadLine();
+            Console.Write("$ patrynomic: ");
+            string patrynomic = Console.ReadLine();
+            Console.Write("$ second name: ");
+            string secondName = Console.ReadLine();
+            Console.Write("$ passport series: ");
+            string series = Console.ReadLine();
+            Console.Write("$ passport number: ");
+            string number = Console.ReadLine();
 
-            MySqlTransaction sqlTransaction = currentConnection.BeginTransaction();
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "Register";
 
-            try
+            MySqlParameter Login = new MySqlParameter
             {
-                MySqlCommand command = new MySqlCommand("LOCK TABLES client WRITE", currentConnection);
-                command.Transaction = sqlTransaction;
-                command.ExecuteNonQuery();
-                command.CommandText = "INSERT INTO client " +
-                    "(email, login, password, phonenumber, passport_id, adress_id, role_id, status_id) " +
-                    "VALUES " +
-                    "(@uEmail, @uLogin, @uPassword, @uPhone, @uPassport, @uAdress, @uRole, @uStatus)";
-                command.Parameters.Add("@uEmail", MySqlDbType.VarChar).Value = email;
-                command.Parameters.Add("@uLogin", MySqlDbType.VarChar).Value = login;
-                command.Parameters.Add("@uPassword", MySqlDbType.Int32).Value = int.Parse(password);
-                command.Parameters.Add("@uPhone", MySqlDbType.VarChar).Value = phone;
-                command.Parameters.Add("@uPassport", MySqlDbType.Int16).Value = 0;
-                command.Parameters.Add("@uAdress", MySqlDbType.Int16).Value = 0;
-                command.Parameters.Add("@uStatus", MySqlDbType.VarChar).Value = 0;
-                command.Parameters.Add("@uRole", MySqlDbType.Int16).Value = 0;
-                command.ExecuteNonQuery();
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
 
-                command.CommandText = "UNLOCK TABLES";
-                command.ExecuteNonQuery();
-
-                sqlTransaction.Commit();
-                Console.WriteLine("User registred.");
-            }
-            catch (Exception ex)
+            MySqlParameter Password = new MySqlParameter
             {
-                Console.WriteLine(ex.Message);
-                sqlTransaction.Rollback();
-                return;
-            }
+                ParameterName = "Password",
+                MySqlDbType = MySqlDbType.Int32,
+                Value = int.Parse(password)
+            };
+            command.Parameters.Add(Password);
+
+            MySqlParameter Email = new MySqlParameter
+            {
+                ParameterName = "Email",
+                Value = email
+            };
+            command.Parameters.Add(Email);
+
+            MySqlParameter Phone = new MySqlParameter
+            {
+                ParameterName = "Phone",
+                Value = phone
+            };
+            command.Parameters.Add(Phone);
+
+            MySqlParameter FirstName = new MySqlParameter
+            {
+                ParameterName = "FirstName",
+                Value = firstName
+            };
+            command.Parameters.Add(FirstName);
+
+            MySqlParameter SecondName = new MySqlParameter
+            {
+                ParameterName = "SecondName",
+                Value = secondName
+            };
+            command.Parameters.Add(SecondName);
+
+            MySqlParameter Patrynomic = new MySqlParameter
+            {
+                ParameterName = "Patrynomic",
+                Value = patrynomic
+            };
+            command.Parameters.Add(Patrynomic);
+
+            MySqlParameter Series = new MySqlParameter
+            {
+                ParameterName = "Series",
+                Value = series
+            };
+            command.Parameters.Add(Series);
+
+            MySqlParameter Number = new MySqlParameter
+            {
+                ParameterName = "Number",
+                Value = number
+            };
+            command.Parameters.Add(Number);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int16,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Registration {0}", (result_code)(int)command.Parameters["Result"].Value);
         }
 
         private static void DeleteUser(string login)
@@ -173,7 +284,6 @@ namespace CarSharingORMApp
                 return;
             }
         }
-        
 
         private static void BlockUser(string login)
         {
@@ -190,7 +300,7 @@ namespace CarSharingORMApp
                 {
                     Console.WriteLine($"User with login `{login}` doesn't exist");
                 }
-                   
+
             }
             catch (Exception ex)
             {
@@ -201,44 +311,120 @@ namespace CarSharingORMApp
 
         private static void FindUserBy(string parameters)
         {
-            string[] splittedParameters = parameters.Split('=');
-            string field = splittedParameters[0];
-            string value = splittedParameters[1];
+            bool isOk = false;
+            string phone = "375447474200";
+            string firstName = "Andrey";
+            string secondName = "Stepanko";
+            string patrynomic = "Grigorevich";
+            string login = "bylka";
+            string email = "email@mail.ru";
 
-            try
+            Console.Write("  First name: ");
+            firstName = Console.ReadLine();
+            Console.Write("  Second name: ");
+            secondName = Console.ReadLine();
+            Console.Write("  Patrynomic: ");
+            patrynomic = Console.ReadLine();
+            Console.Write("  Login: ");
+            login = Console.ReadLine();
+            do
             {
-                var command = currentConnection.CreateCommand();
-                field = "`"+field+"`";
-                command.CommandText = $"SELECT * FROM client WHERE {field} = '{value}'";
-                MySqlDataReader reader = command.ExecuteReader();
-
-                if (reader.HasRows) 
+                Console.Write("  PhoneNumber:");
+                phone = Console.ReadLine();
+                if (phone.Length > 20)
                 {
-                    Console.WriteLine("id\temail\t\tlogin\t\tphone\t\tstatus");
-
-                    while (reader.Read())
-                    {
-                        object id = reader.GetValue(0);
-                        object email = reader.GetValue(1);
-                        object login = reader.GetValue(2);
-                        object password = reader.GetValue(3);
-                        object phone = reader.GetValue(4);
-                        object passport = reader.GetValue(5);
-                        object adress = reader.GetValue(6);
-                        object role = reader.GetValue(7);
-                        object status = reader.GetValue(8);
-                        object date = reader.GetValue(9);
-
-                        Console.WriteLine("{0}\t{1}\t{2}\t\t{3}\t{4}", id, email, login, phone ,status);
-                    }
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'PhoneNumber'");
                 }
-
-                reader.Close();
-
+                else
+                    isOk = false;
             }
-            catch(Exception ex)
+            while (isOk);
+
+            do
             {
-                Console.WriteLine(ex.Message);
+                Console.Write("  Email:");
+                email = Console.ReadLine();
+                if (email.Length > 20)
+                {
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'Email'");
+                }
+                else
+                    isOk = false;
+            }
+            while (isOk);
+            
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "FindUser";
+
+            MySqlParameter Login = new MySqlParameter
+            {
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
+
+            MySqlParameter FirstName = new MySqlParameter
+            {
+                ParameterName = "FirstName",
+                Value = firstName
+            };
+            command.Parameters.Add(FirstName);
+
+            MySqlParameter SecondName = new MySqlParameter
+            {
+                ParameterName = "SecondName",
+                Value = secondName
+            };
+            command.Parameters.Add(SecondName);
+
+            MySqlParameter Patrynomic = new MySqlParameter
+            {
+                ParameterName = "Patrynomic",
+                Value = patrynomic
+            };
+            command.Parameters.Add(Patrynomic);
+
+            MySqlParameter PhoneNumber = new MySqlParameter
+            {
+                ParameterName = "Phone",
+                Value = phone
+            };
+            command.Parameters.Add(PhoneNumber);
+
+            MySqlParameter Email = new MySqlParameter
+            {
+                ParameterName = "Email",
+                Value = email
+            };
+            command.Parameters.Add(Email);
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            if (table.Rows.Count != 0)
+            {
+                DataRow row = table.Rows[0];
+                Console.WriteLine("- User info: ");
+                Console.WriteLine("  Id: {0}", row["id"]);
+                Console.WriteLine("  First name: {0}", row["firstname"]);
+                Console.WriteLine("  Second name: {0}", row["secondname"]);
+                Console.WriteLine("  Patrynomic: {0}", row["patrynomic"]);
+                Console.WriteLine("  Phone: {0}", row["phone"]);
+                Console.WriteLine("  Email: {0}", row["email"]);
+                Console.WriteLine("  Role: {0}", row["role"]);
+                Console.WriteLine("  Status: {0}", row["status"]);
+                Console.WriteLine("  Register date: {0}", row["register"]);
+            }
+            else
+            {
+                Console.WriteLine("- User not found");
             }
 
         }
@@ -261,18 +447,94 @@ namespace CarSharingORMApp
                 }
                 command.CommandText = "UNLOCK TABLES";
                 command.ExecuteNonQuery();
+
+                DataTable table = new DataTable();
+                MySqlDataAdapter adapter = new MySqlDataAdapter();
+                command.CommandText = "SELECT * FROM `client` WHERE `login` = @uL";
+                adapter.SelectCommand = command;
+                adapter.Fill(table);
+
                 command.CommandText = $"CREATE EVENT IF NOT EXISTS {login + "_event"} " +
                                                         "ON  SCHEDULE AT  CURRENT_TIMESTAMP + INTERVAL @time MINUTE " +
                                                         "DO  UPDATE client SET `status_id` = 0 WHERE `login` = @uL";
                 command.Parameters.Add("@time", MySqlDbType.Int32).Value = time;
                 command.ExecuteNonQuery();
+                command.CommandText = $"INSERT INTO block_log (client_id, start_time, end_time) VALUES ({table.Rows[0]["id"]}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL @time MINUTE)";
+                command.ExecuteNonQuery();
                 Console.WriteLine($"User was blocked for {time} minutes.");
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
 
+        }
+
+        private static void Restore(string login)
+        {
+            try
+            {
+                var command = currentConnection.CreateCommand();
+                command.Parameters.Add("@login", MySqlDbType.VarChar).Value = login;
+
+                command.CommandText = "SELECT * FROM `backup` WHERE `login` = @login AND `backup_creation_time` = (SELECT MAX(`backup_creation_time`) FROM `backup`)";
+                MySqlDataReader reader = command.ExecuteReader();
+
+                if (reader.HasRows)
+                {
+                    reader.Read();
+                    command.Parameters.Add("@bId", MySqlDbType.Int32).Value = reader["client_id"];
+                    command.Parameters.Add("@bEmail", MySqlDbType.VarChar).Value = reader["email"];
+                    command.Parameters.Add("@bLogin", MySqlDbType.Int64).Value = reader["login"];
+                    command.Parameters.Add("@bPassword", MySqlDbType.VarChar).Value = reader["password"];
+                    command.Parameters.Add("@bPhone", MySqlDbType.VarChar).Value = reader["phoneNumber"];
+                    command.Parameters.Add("@bPassport", MySqlDbType.Int32).Value = reader["passport_id"];
+                    command.Parameters.Add("@bAdress", MySqlDbType.Int32).Value = reader["adress_id"];
+                    command.Parameters.Add("@bRole", MySqlDbType.Int32).Value = reader["role_id"];
+                    command.Parameters.Add("@bStatus", MySqlDbType.Int32).Value = reader["status_id"];
+                    command.Parameters.Add("@bRegDate", MySqlDbType.DateTime).Value = reader["register_date"];
+                    object backupTime = reader["backup_creation_time"];
+                    string operation = reader["operation"].ToString();
+                    Console.WriteLine($"- Last backup info for {login}:\n  Operation: {operation}\n  Time: {backupTime}");
+                    reader.Close();
+
+                    command.CommandText = "LOCK TABLES client WRITE";
+                    command.ExecuteNonQuery();
+                    if (operation == "update")
+                        command.CommandText =
+                            "UPDATE " +
+                            "client " +
+                            "SET " +
+                            "`id` = @bId, `email` = @bEmail, `login` = @bLogin, `password` = @bPassword, " +
+                            "`phoneNumber` = @bPhone, `passport_id` = @bPassport, `adress_id` = @bAdress, `role_id` = @bRole, " +
+                            "`status_id` = @bStatus, `register_date` = @bRegDate WHERE `login` = @login";
+                    if (operation == "delete")
+                        command.CommandText =
+                            "INSERT " +
+                            "client " +
+                            "SET " +
+                            "`id` = @bId, `email` = @bEmail, `login` = @bLogin, `password` = @bPassword, " +
+                            "`phoneNumber` = @bPhone, `passport_id` = @bPassport, `adress_id` = @bAdress, `role_id` = @bRole, " +
+                            "`status_id` = @bStatus, `register_date` = @bRegDate";
+                    int isUpdated = command.ExecuteNonQuery();
+                    if (isUpdated > 0)
+                    {
+                        Console.WriteLine($"- User {login} was restored. ");
+                    }
+                    command.CommandText = "UNLOCK TABLES";
+                    command.ExecuteNonQuery();
+
+                }
+                else
+                {
+                    reader.Close();
+                    Console.WriteLine($"- No backup for {login}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Restoring failed: {0}", ex.Message);
+            }
         }
 
         private static void UpdateRole(string login, int role)
@@ -280,7 +542,7 @@ namespace CarSharingORMApp
             try
             {
                 var command = currentConnection.CreateCommand();
-                command.Parameters.Add("@role",MySqlDbType.Int32).Value = role;
+                command.Parameters.Add("@role", MySqlDbType.Int32).Value = role;
                 command.Parameters.Add("@login", MySqlDbType.VarChar).Value = login;
 
                 command.CommandText = "LOCK TABLES client WRITE";
@@ -288,7 +550,7 @@ namespace CarSharingORMApp
                 command.CommandText = "UPDATE client SET `role_id` = @role WHERE `login` = @login";
                 int isUpdated = command.ExecuteNonQuery();
 
-                if(isUpdated != 0)
+                if (isUpdated != 0)
                 {
                     Console.WriteLine($"User's role was updated to {(role)role}");
                 }
@@ -296,7 +558,7 @@ namespace CarSharingORMApp
                 command.CommandText = "UNLOCK TABLES";
                 command.ExecuteNonQuery();
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
@@ -308,7 +570,7 @@ namespace CarSharingORMApp
             {
                 MySqlCommand command = new MySqlCommand("LOCK TABLES client WRITE", currentConnection);
                 command.ExecuteNonQuery();
-                command.CommandText ="UPDATE client SET `status_id` = @uS WHERE `login` = @uL";
+                command.CommandText = "UPDATE client SET `status_id` = @uS WHERE `login` = @uL";
                 command.Parameters.Add("@uL", MySqlDbType.VarChar).Value = login;
                 command.Parameters.Add("@uS", MySqlDbType.Int16).Value = (int)status.Active;
                 command.ExecuteNonQuery();
@@ -325,15 +587,14 @@ namespace CarSharingORMApp
 
         private static void AvailableCommands()
         {
-                Console.WriteLine("Available functionality");
-                Console.WriteLine("- Help          [help       | h]");
+            Console.WriteLine("Available functionality");
+            Console.WriteLine("- Help          [help       | h]");
             if (currentUser is UnregistredUser)
             {
                 Console.WriteLine("- Registration  [registrare | r]");
                 Console.WriteLine("- Authorization [log        | a]");
             }
-
-            if (currentUser is Admin)
+            if (currentUser is Admin && (((Admin)currentUser).StatusId != (int)status.Blocked))
             {
                 Console.WriteLine("- Delete user   [delete     |  ]");
                 Console.WriteLine("- Block user    [block      |  ]");
@@ -341,8 +602,8 @@ namespace CarSharingORMApp
                 Console.WriteLine("- UnBlock user  [unblock    |  ]");
                 Console.WriteLine("- Update role   [updaterole |  ]");
             }
-                Console.WriteLine("- Unlog         [unlog      |  ]");
-                Console.WriteLine("- Exit          [exit       | e] ");
+            Console.WriteLine("- Unlog         [unlog      |  ]");
+            Console.WriteLine("- Exit          [exit       | e] ");
         }
 
         private static void UnLogging()
@@ -394,7 +655,7 @@ namespace CarSharingORMApp
                 }
                 if (string.Compare(splittedCommand[0], "updaterole", true) == 0 && currentUser is Admin)
                 {
-                    switch(splittedCommand[2])
+                    switch (splittedCommand[2])
                     {
                         case "operator":
                             UpdateRole(splittedCommand[1], (int)role.Operator);
@@ -410,12 +671,21 @@ namespace CarSharingORMApp
                 }
                 if (string.Compare(splittedCommand[0], "find", true) == 0 && currentUser is Admin)
                 {
-                    FindUserBy(splittedCommand[1]);
+                    if (splittedCommand.Length < 2)
+                        FindUserBy(null);
+                    else
+                        FindUserBy(splittedCommand[1]);
+
+                }
+                if (string.Compare(splittedCommand[0], "restore", true) == 0)
+                {
+                    Restore(splittedCommand[1]);
+
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                return;
+                Console.WriteLine(ex.Message);
             }
 
         }

@@ -17,7 +17,7 @@ namespace CarSharingORMApp
         {
             switch(int.Parse(role))
             {
-                case 2: return new Admin(int.Parse(id), int.Parse(role), int.Parse(status));
+                case 2: return new Admin(int.Parse(role), int.Parse(status), int.Parse(id));
                 case 0: return new RegistredUser(int.Parse(id), int.Parse(role), int.Parse(status));
                 case 1: return null;
             }
