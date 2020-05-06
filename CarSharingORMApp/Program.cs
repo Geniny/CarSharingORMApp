@@ -8,20 +8,21 @@ using MySqlConnector;
 using MySql.Data.MySqlClient;
 using System.Data;
 using System.Threading;
+using ConsoleTables;
+using System.Globalization;
 
 namespace CarSharingORMApp
 {
     enum result_code
     {
-        Complete,
-        Failed
+        Failed,
+        Complete
     }
     enum status
     {
         Active,
         Blocked
     }
-
     enum role
     {
         User,
@@ -50,7 +51,7 @@ namespace CarSharingORMApp
                     HandleCommand(Console.ReadLine());
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
@@ -147,23 +148,23 @@ namespace CarSharingORMApp
 
         private static void UserRegistration()
         {
-            Console.Write("$ email: ");
+            Console.Write("  email: ");
             string email = Console.ReadLine();
-            Console.Write("$ login: ");
+            Console.Write("  login: ");
             string login = Console.ReadLine();
-            Console.Write("$ password: ");
+            Console.Write("  password: ");
             string password = Console.ReadLine();
-            Console.Write("$ phone number: ");
+            Console.Write("  phone number: ");
             string phone = Console.ReadLine();
-            Console.Write("$ first name: ");
+            Console.Write("  first name: ");
             string firstName = Console.ReadLine();
-            Console.Write("$ patrynomic: ");
+            Console.Write("  patrynomic: ");
             string patrynomic = Console.ReadLine();
-            Console.Write("$ second name: ");
+            Console.Write("  second name: ");
             string secondName = Console.ReadLine();
-            Console.Write("$ passport series: ");
+            Console.Write("  passport series: ");
             string series = Console.ReadLine();
-            Console.Write("$ passport number: ");
+            Console.Write("  passport number: ");
             string number = Console.ReadLine();
 
             var command = currentConnection.CreateCommand();
@@ -237,128 +238,97 @@ namespace CarSharingORMApp
             MySqlParameter Result = new MySqlParameter
             {
                 ParameterName = "Result",
-                MySqlDbType = MySqlDbType.Int16,
+                MySqlDbType = MySqlDbType.Int32,
             };
             Result.Direction = ParameterDirection.Output;
             command.Parameters.Add(Result);
 
             command.ExecuteNonQuery();
-            Console.WriteLine("- Registration {0}", (result_code)(int)command.Parameters["Result"].Value);
+            Console.WriteLine("- Register command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
         }
 
-        private static void DeleteUser(string login)
+        private static void AddTarif()
         {
-            MySqlTransaction sqlTransaction = currentConnection.BeginTransaction();
+            int id;
+            string tarifName;
+            string description;
+            int perHourCost;
+            int perMileCost;
+            Console.Write("  id: ");
+            id = int.Parse(Console.ReadLine());
+            Console.Write("  tarif name: ");
+            tarifName = Console.ReadLine();
+            Console.Write("  description: ");
+            description = Console.ReadLine();
+            Console.Write("  cost per hourt: ");
+            perHourCost = int.Parse(Console.ReadLine());
+            Console.Write("  cost per mile: ");
+            perMileCost = int.Parse(Console.ReadLine());
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "AddTarif";
 
-            try
+            MySqlParameter Id = new MySqlParameter
             {
-                MySqlCommand command = currentConnection.CreateCommand();
-                command.Transaction = sqlTransaction;
-                command.CommandText = "LOCK TABLES client WRITE";
-                command.ExecuteNonQuery();
-                command.CommandText = "SELECT * FROM `client` WHERE `login` = @uL";
-                command.Parameters.Add("@uL", MySqlDbType.VarChar).Value = login;
-                int isExists = command.ExecuteNonQuery();
+                ParameterName = "Id",
+                Value = id,
+                MySqlDbType = MySqlDbType.Int32
+                
+            };
+            command.Parameters.Add(Id);
 
-                if (isExists != 0)
-                {
-                    command.CommandText = "DELETE FROM client WHERE `login` = @uL";
-                    int isDeleted = command.ExecuteNonQuery();
-                    command.CommandText = "UNLOCK TABLES";
-                    command.ExecuteNonQuery();
-                    sqlTransaction.Commit();
-                    if (isDeleted != 0)
-                        Console.WriteLine($"User {login} was deleted.");
-                }
-                else
-                {
-                    sqlTransaction.Rollback();
-                    Console.WriteLine($"User with login `{login}` doesn't exist");
-                }
-
-            }
-            catch (Exception ex)
+            MySqlParameter TarifName = new MySqlParameter
             {
-                Console.WriteLine(ex.Message);
-                sqlTransaction.Rollback();
-                return;
-            }
+                ParameterName = "TarifName",
+                Value = tarifName
+            };
+            command.Parameters.Add(TarifName);
+
+            MySqlParameter Description = new MySqlParameter
+            {
+                ParameterName = "Description",
+                Value = description
+            };
+            command.Parameters.Add(Description);
+
+            MySqlParameter PerHourCost = new MySqlParameter
+            {
+                ParameterName = "PerHourCost",
+                Value = perHourCost
+            };
+            command.Parameters.Add(PerHourCost);
+
+            MySqlParameter PerMileCost = new MySqlParameter
+            {
+                ParameterName = "PerMileCost",
+                Value = perMileCost
+            };
+            command.Parameters.Add(PerMileCost);
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Add tarif command status: Complete");
         }
 
-        private static void BlockUser(string login)
+        private static void UpdateUser(string login)
         {
-            try
-            {
-                MySqlCommand command = currentConnection.CreateCommand();
-                command.Parameters.Add("@uL", MySqlDbType.VarChar).Value = login;
-                command.Parameters.Add("@uS", MySqlDbType.Int16).Value = (int)status.Blocked;
-                command.CommandText = "UPDATE client SET `status_id` = @uS WHERE `login` = @uL";
-                int isChanged = command.ExecuteNonQuery();
-                if (isChanged != 0)
-                    Console.WriteLine($"User's status was changed to `{status.Blocked}`");
-                else
-                {
-                    Console.WriteLine($"User with login `{login}` doesn't exist");
-                }
-
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                return;
-            }
-        }
-
-        private static void FindUserBy(string parameters)
-        {
-            bool isOk = false;
-            string phone = "375447474200";
-            string firstName = "Andrey";
-            string secondName = "Stepanko";
-            string patrynomic = "Grigorevich";
-            string login = "bylka";
-            string email = "email@mail.ru";
-
-            Console.Write("  First name: ");
-            firstName = Console.ReadLine();
-            Console.Write("  Second name: ");
-            secondName = Console.ReadLine();
-            Console.Write("  Patrynomic: ");
-            patrynomic = Console.ReadLine();
-            Console.Write("  Login: ");
-            login = Console.ReadLine();
-            do
-            {
-                Console.Write("  PhoneNumber:");
-                phone = Console.ReadLine();
-                if (phone.Length > 20)
-                {
-                    isOk = true;
-                    Console.WriteLine("- Reenter field 'PhoneNumber'");
-                }
-                else
-                    isOk = false;
-            }
-            while (isOk);
-
-            do
-            {
-                Console.Write("  Email:");
-                email = Console.ReadLine();
-                if (email.Length > 20)
-                {
-                    isOk = true;
-                    Console.WriteLine("- Reenter field 'Email'");
-                }
-                else
-                    isOk = false;
-            }
-            while (isOk);
-            
+            Console.Write("  email: ");
+            string email = Console.ReadLine();
+            Console.Write("  new login: ");
+            string newLogin = Console.ReadLine();
+            Console.Write("  password: ");
+            string password = Console.ReadLine();
+            Console.Write("  phone number: ");
+            string phone = Console.ReadLine();
+            Console.Write("  first name: ");
+            string firstName = Console.ReadLine();
+            Console.Write("  patrynomic: ");
+            string patrynomic = Console.ReadLine();
+            Console.Write("  second name: ");
+            string secondName = Console.ReadLine();
 
             var command = currentConnection.CreateCommand();
             command.CommandType = CommandType.StoredProcedure;
-            command.CommandText = "FindUser";
+            command.CommandText = "UpdateUser";
 
             MySqlParameter Login = new MySqlParameter
             {
@@ -366,6 +336,35 @@ namespace CarSharingORMApp
                 Value = login
             };
             command.Parameters.Add(Login);
+
+            MySqlParameter NewLogin = new MySqlParameter
+            {
+                ParameterName = "NewLogin",
+                Value = newLogin
+            };
+            command.Parameters.Add(NewLogin);
+
+            MySqlParameter Password = new MySqlParameter
+            {
+                ParameterName = "Password",
+                MySqlDbType = MySqlDbType.Int32,
+                Value = int.Parse(password)
+            };
+            command.Parameters.Add(Password);
+
+            MySqlParameter Email = new MySqlParameter
+            {
+                ParameterName = "Email",
+                Value = email
+            };
+            command.Parameters.Add(Email);
+
+            MySqlParameter Phone = new MySqlParameter
+            {
+                ParameterName = "Phone",
+                Value = phone
+            };
+            command.Parameters.Add(Phone);
 
             MySqlParameter FirstName = new MySqlParameter
             {
@@ -388,19 +387,174 @@ namespace CarSharingORMApp
             };
             command.Parameters.Add(Patrynomic);
 
-            MySqlParameter PhoneNumber = new MySqlParameter
+            MySqlParameter Result = new MySqlParameter
             {
-                ParameterName = "Phone",
-                Value = phone
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
             };
-            command.Parameters.Add(PhoneNumber);
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
 
-            MySqlParameter Email = new MySqlParameter
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Update user command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void UpdateTarif(string tarifName)
+        {
+            string newTarifName;
+            string description;
+            int perHourCost;
+            int perMileCost;
+            Console.Write("  new tarif name: ");
+            newTarifName = Console.ReadLine();
+            Console.Write("  description: ");
+            description = Console.ReadLine();
+            Console.Write("  cost per hourt: ");
+            perHourCost = int.Parse(Console.ReadLine());
+            Console.Write("  cost per mile: ");
+            perMileCost = int.Parse(Console.ReadLine());
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "UpdateTarif";
+
+            MySqlParameter TarifName = new MySqlParameter
             {
-                ParameterName = "Email",
-                Value = email
+                ParameterName = "TarifName",
+                Value = tarifName
             };
-            command.Parameters.Add(Email);
+            command.Parameters.Add(TarifName);
+
+            MySqlParameter NewTarifName = new MySqlParameter
+            {
+                ParameterName = "NewTarifName",
+                Value = newTarifName
+            };
+            command.Parameters.Add(NewTarifName);
+
+            MySqlParameter Description = new MySqlParameter
+            {
+                ParameterName = "Description",
+                Value = description
+            };
+            command.Parameters.Add(Description);
+
+            MySqlParameter PerHourCost = new MySqlParameter
+            {
+                ParameterName = "PerHourCost",
+                Value = perHourCost
+            };
+            command.Parameters.Add(PerHourCost);
+
+            MySqlParameter PerMileCost = new MySqlParameter
+            {
+                ParameterName = "PerMileCost",
+                Value = perMileCost
+            };
+            command.Parameters.Add(PerMileCost);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Update tarif command status: {0}", 
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void DeleteUser(string login)
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "DeleteClient";
+
+            MySqlParameter Login = new MySqlParameter
+            {
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Delete command status: {0}", (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void UpdateCar(string number)
+        {
+            string model;
+            string color;
+            int capacity;
+
+            Console.Write("  model: ");
+            model = Console.ReadLine();
+            Console.Write("  color: ");
+            color = Console.ReadLine();
+            Console.Write("  capacity: ");
+            capacity = int.Parse(Console.ReadLine());
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "UpdateCar";
+
+            MySqlParameter Capacity = new MySqlParameter
+            {
+                ParameterName = "Capacity",
+                Value = capacity,
+                MySqlDbType = MySqlDbType.Int32
+
+            };
+            command.Parameters.Add(Capacity);
+
+            MySqlParameter Model = new MySqlParameter
+            {
+                ParameterName = "Model",
+                Value = model
+            };
+            command.Parameters.Add(Model);
+
+            MySqlParameter Color = new MySqlParameter
+            {
+                ParameterName = "Color",
+                Value = color
+            };
+            command.Parameters.Add(Color);
+
+            MySqlParameter Number = new MySqlParameter
+            {
+                ParameterName = "Number",
+                Value = number
+            };
+            command.Parameters.Add(Number);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Update car command status: {0}", 
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void ShowClients()
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "ShowClients";
 
             DataTable table = new DataTable();
             MySqlDataAdapter adapter = new MySqlDataAdapter();
@@ -408,6 +562,651 @@ namespace CarSharingORMApp
             adapter.SelectCommand = command;
             adapter.Fill(table);
 
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+
+
+            Console.WriteLine("- Clients count: {0}", consoleTable.Rows.Count);
+        }
+
+        private static void AddProduct()
+        {
+            string carNumber;
+            string companyName;
+            string tarifName;
+            string productName;
+            Console.Write("  tarif name: ");
+            tarifName = Console.ReadLine();
+            Console.Write("  car number: ");
+            carNumber = Console.ReadLine();
+            Console.Write("  company name: ");
+            companyName = Console.ReadLine();
+            Console.Write("  product name: ");
+            productName = Console.ReadLine();
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "AddProduct";
+
+            MySqlParameter TarifName = new MySqlParameter
+            {
+                ParameterName = "TarifName",
+                Value = tarifName
+            };
+            command.Parameters.Add(TarifName);
+
+            MySqlParameter CompanyName = new MySqlParameter
+            {
+                ParameterName = "CompanyName",
+                Value = companyName
+            };
+            command.Parameters.Add(CompanyName);
+
+            MySqlParameter ProductName = new MySqlParameter
+            {
+                ParameterName = "ProductName",
+                Value = productName
+            };
+            command.Parameters.Add(ProductName);
+
+            MySqlParameter CarNumber = new MySqlParameter
+            {
+                ParameterName = "CarNumber",
+                Value = carNumber
+            };
+            command.Parameters.Add(CarNumber);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Add product command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void AddBank()
+        {
+            string name;
+
+            Console.Write("  name: ");
+            name = Console.ReadLine();
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "AddBank";
+
+            MySqlParameter BankName = new MySqlParameter
+            {
+                ParameterName = "BankName",
+                Value = name,
+            };
+            command.Parameters.Add(BankName);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Add bank command status: Complete");
+        }
+
+        private static void UpdateBank(string name)
+        {
+            string newName;
+
+            Console.Write("  new name: ");
+            newName = Console.ReadLine();
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "UpdateBank";
+
+            MySqlParameter BankName = new MySqlParameter
+            {
+                ParameterName = "BankName",
+                Value = name,
+            };
+            command.Parameters.Add(BankName);
+
+            MySqlParameter NewBankName = new MySqlParameter
+            {
+                ParameterName = "NewBankName",
+                Value = newName,
+            };
+            command.Parameters.Add(NewBankName);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Update bank command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void AddCompany()
+        {
+            bool isOk = false;
+            string name;
+            string bankAccountNumber;
+
+            Console.Write("  name: ");
+            name = Console.ReadLine();
+            do
+            {
+                Console.Write("  bank account number: ");
+                bankAccountNumber = Console.ReadLine();
+                if (bankAccountNumber.Length != 8)
+                {
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'Bank account number'");
+                }
+                else
+                    isOk = false;
+            }
+            while (isOk);
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "AddCompany";
+
+            MySqlParameter CompanyName = new MySqlParameter
+            {
+                ParameterName = "CompanyName",
+                Value = name,
+            };
+            command.Parameters.Add(CompanyName);
+
+            MySqlParameter BankAccountNumber = new MySqlParameter
+            {
+                ParameterName = "BankAccountNumber",
+                Value = bankAccountNumber,
+            };
+            command.Parameters.Add(BankAccountNumber);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Add company command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void UpdateCompany(string name)
+        {
+            bool isOk = false;
+            string newName;
+            string bankAccountNumber;
+            Console.Write("  new name: ");
+            newName = Console.ReadLine();
+            do
+            {
+                Console.Write("  bank account number: ");
+                bankAccountNumber = Console.ReadLine();
+                if (bankAccountNumber.Length != 8)
+                {
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'Bank account number'");
+                }
+                else
+                    isOk = false;
+            }
+            while (isOk);
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "UpdateCompany";
+
+            MySqlParameter CompanyName = new MySqlParameter
+            {
+                ParameterName = "CompanyName",
+                Value = name,
+            };
+            command.Parameters.Add(CompanyName);
+
+            MySqlParameter NewCompanyName = new MySqlParameter
+            {
+                ParameterName = "NewCompanyName",
+                Value = newName,
+            };
+            command.Parameters.Add(NewCompanyName);
+
+            MySqlParameter NewBankAccountNumber = new MySqlParameter
+            {
+                ParameterName = "NewBankAccountNumber",
+                Value = bankAccountNumber,
+            };
+            command.Parameters.Add(NewBankAccountNumber);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Update company command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void AddBankAccount()
+        {
+            bool isOk = false;
+            string name;
+            string number;
+
+            Console.Write("  bank name: ");
+            name = Console.ReadLine();
+
+            do
+            {
+                Console.Write("  bank account number: ");
+                number = Console.ReadLine();
+                if (number.Length != 8)
+                {
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'Bank account number'");
+                }
+                else
+                    isOk = false;
+            }
+            while (isOk);
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "AddBankAccount";
+
+            MySqlParameter BankName = new MySqlParameter
+            {
+                ParameterName = "BankName",
+                Value = name,
+            };
+            command.Parameters.Add(BankName);
+
+            MySqlParameter Number = new MySqlParameter
+            {
+                ParameterName = "Number",
+                Value = number,
+            };
+            command.Parameters.Add(Number);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Add bank account command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void ShowCarsModel()
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "OrderCarByModel";
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+            Console.WriteLine("- Cars count: {0}", consoleTable.Rows.Count); 
+        }
+
+        private static void ShowCarsState()
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "OrderCarByState";
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+            Console.WriteLine("- Cars count: {0}", consoleTable.Rows.Count);
+        }
+
+        private static void ShowCompanies()
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "ShowCompanies";
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+        }
+
+        private static void ShowProducts(string type)
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            switch(type)
+            {
+                case "name": command.CommandText = "OrderProductByName"; break;
+                case "cost": command.CommandText = "OrderProductByCost"; break;
+                case null: command.CommandText = "ShowProducts"; break;
+                default: command.CommandText = "ShowProducts"; break;
+            }
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+        }
+
+        private static void ShowClient (string login)
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "ShowClientStatus";
+
+            MySqlParameter Login = new MySqlParameter
+            {
+                ParameterName = "Login",
+                Value = login,
+            };
+            command.Parameters.Add(Login);
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+        }
+
+        private static void ShowCars()
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "ShowFreeCars";
+            MySqlParameter Count = new MySqlParameter
+            {
+                ParameterName = "Count",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Count.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Count);
+
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+            Console.WriteLine("- Cars count: {0}", (int)command.Parameters["Count"].Value);
+        }
+        
+        private static void AddCar()
+        {
+            string model;
+            string color;
+            string number;
+            int capacity;
+
+            Console.Write("  model: ");
+            model = Console.ReadLine();
+            Console.Write("  color: ");
+            color = Console.ReadLine();
+            Console.Write("  number: ");
+            number = Console.ReadLine();
+            Console.Write("  capacity: ");
+            capacity = int.Parse(Console.ReadLine());
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "AddCar";
+
+            MySqlParameter Capacity = new MySqlParameter
+            {
+                ParameterName = "Capacity",
+                Value = capacity,
+                MySqlDbType = MySqlDbType.Int32
+
+            };
+            command.Parameters.Add(Capacity);
+
+            MySqlParameter Model = new MySqlParameter
+            {
+                ParameterName = "Model",
+                Value = model
+            };
+            command.Parameters.Add(Model);
+
+            MySqlParameter Color = new MySqlParameter
+            {
+                ParameterName = "Color",
+                Value = color
+            };
+            command.Parameters.Add(Color);
+
+            MySqlParameter Number = new MySqlParameter
+            {
+                ParameterName = "Number",
+                Value = number
+            };
+            command.Parameters.Add(Number);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Add car command status: Complete");
+        }
+
+        private static void BlockUser(string login)
+        {
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "BlockUser";
+
+            MySqlParameter Login = new MySqlParameter
+            {
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Block command status: {0}", (result_code)(int)command.Parameters["Result"].Value);
+        }
+
+        private static void FindUserBy(string parameters)
+        {
+            bool isOk = false;
+            string phone ;
+            string firstName ;
+            string secondName ;
+            string patrynomic ;
+            string login ;
+            string email ;
+            Console.Write("  First name: ");
+            firstName = Console.ReadLine();
+            Console.Write("  Second name: ");
+            secondName = Console.ReadLine();
+            Console.Write("  Patrynomic: ");
+            patrynomic = Console.ReadLine();
+            Console.Write("  Login: ");
+            login = Console.ReadLine();
+            do
+            {
+                Console.Write("  PhoneNumber:");
+                phone = Console.ReadLine();
+                if (phone.Length > 20)
+                {
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'PhoneNumber'");
+                }
+                else
+                    isOk = false;
+            }
+            while (isOk);
+            do
+            {
+                Console.Write("  Email:");
+                email = Console.ReadLine();
+                if (email.Length > 20)
+                {
+                    isOk = true;
+                    Console.WriteLine("- Reenter field 'Email'");
+                }
+                else
+                    isOk = false;
+            }
+            while (isOk);
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "FindUser";
+            MySqlParameter Login = new MySqlParameter
+            {
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
+            MySqlParameter FirstName = new MySqlParameter
+            {
+                ParameterName = "FirstName",
+                Value = firstName
+            };
+            command.Parameters.Add(FirstName);
+            MySqlParameter SecondName = new MySqlParameter
+            {
+                ParameterName = "SecondName",
+                Value = secondName
+            };
+            command.Parameters.Add(SecondName);
+            MySqlParameter Patrynomic = new MySqlParameter
+            {
+                ParameterName = "Patrynomic",
+                Value = patrynomic
+            };
+            command.Parameters.Add(Patrynomic);
+            MySqlParameter PhoneNumber = new MySqlParameter
+            {
+                ParameterName = "Phone",
+                Value = phone
+            };
+            command.Parameters.Add(PhoneNumber);
+            MySqlParameter Email = new MySqlParameter
+            {
+                ParameterName = "Email",
+                Value = email
+            };
+            command.Parameters.Add(Email);
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
             if (table.Rows.Count != 0)
             {
                 DataRow row = table.Rows[0];
@@ -472,117 +1271,84 @@ namespace CarSharingORMApp
 
         private static void Restore(string login)
         {
-            try
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "RestoreBackup";
+
+            MySqlParameter Login = new MySqlParameter
             {
-                var command = currentConnection.CreateCommand();
-                command.Parameters.Add("@login", MySqlDbType.VarChar).Value = login;
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
 
-                command.CommandText = "SELECT * FROM `backup` WHERE `login` = @login AND `backup_creation_time` = (SELECT MAX(`backup_creation_time`) FROM `backup`)";
-                MySqlDataReader reader = command.ExecuteReader();
-
-                if (reader.HasRows)
-                {
-                    reader.Read();
-                    command.Parameters.Add("@bId", MySqlDbType.Int32).Value = reader["client_id"];
-                    command.Parameters.Add("@bEmail", MySqlDbType.VarChar).Value = reader["email"];
-                    command.Parameters.Add("@bLogin", MySqlDbType.Int64).Value = reader["login"];
-                    command.Parameters.Add("@bPassword", MySqlDbType.VarChar).Value = reader["password"];
-                    command.Parameters.Add("@bPhone", MySqlDbType.VarChar).Value = reader["phoneNumber"];
-                    command.Parameters.Add("@bPassport", MySqlDbType.Int32).Value = reader["passport_id"];
-                    command.Parameters.Add("@bAdress", MySqlDbType.Int32).Value = reader["adress_id"];
-                    command.Parameters.Add("@bRole", MySqlDbType.Int32).Value = reader["role_id"];
-                    command.Parameters.Add("@bStatus", MySqlDbType.Int32).Value = reader["status_id"];
-                    command.Parameters.Add("@bRegDate", MySqlDbType.DateTime).Value = reader["register_date"];
-                    object backupTime = reader["backup_creation_time"];
-                    string operation = reader["operation"].ToString();
-                    Console.WriteLine($"- Last backup info for {login}:\n  Operation: {operation}\n  Time: {backupTime}");
-                    reader.Close();
-
-                    command.CommandText = "LOCK TABLES client WRITE";
-                    command.ExecuteNonQuery();
-                    if (operation == "update")
-                        command.CommandText =
-                            "UPDATE " +
-                            "client " +
-                            "SET " +
-                            "`id` = @bId, `email` = @bEmail, `login` = @bLogin, `password` = @bPassword, " +
-                            "`phoneNumber` = @bPhone, `passport_id` = @bPassport, `adress_id` = @bAdress, `role_id` = @bRole, " +
-                            "`status_id` = @bStatus, `register_date` = @bRegDate WHERE `login` = @login";
-                    if (operation == "delete")
-                        command.CommandText =
-                            "INSERT " +
-                            "client " +
-                            "SET " +
-                            "`id` = @bId, `email` = @bEmail, `login` = @bLogin, `password` = @bPassword, " +
-                            "`phoneNumber` = @bPhone, `passport_id` = @bPassport, `adress_id` = @bAdress, `role_id` = @bRole, " +
-                            "`status_id` = @bStatus, `register_date` = @bRegDate";
-                    int isUpdated = command.ExecuteNonQuery();
-                    if (isUpdated > 0)
-                    {
-                        Console.WriteLine($"- User {login} was restored. ");
-                    }
-                    command.CommandText = "UNLOCK TABLES";
-                    command.ExecuteNonQuery();
-
-                }
-                else
-                {
-                    reader.Close();
-                    Console.WriteLine($"- No backup for {login}");
-                }
-            }
-            catch (Exception ex)
+            MySqlParameter Result = new MySqlParameter
             {
-                Console.WriteLine("Restoring failed: {0}", ex.Message);
-            }
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Restore command status: {0}", (result_code)(int)command.Parameters["Result"].Value);
         }
 
-        private static void UpdateRole(string login, int role)
+        private static void UpdateRole(string login, string role)
         {
-            try
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "UpdateRole";
+            MySqlParameter Login = new MySqlParameter
             {
-                var command = currentConnection.CreateCommand();
-                command.Parameters.Add("@role", MySqlDbType.Int32).Value = role;
-                command.Parameters.Add("@login", MySqlDbType.VarChar).Value = login;
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
 
-                command.CommandText = "LOCK TABLES client WRITE";
-                command.ExecuteNonQuery();
-                command.CommandText = "UPDATE client SET `role_id` = @role WHERE `login` = @login";
-                int isUpdated = command.ExecuteNonQuery();
-
-                if (isUpdated != 0)
-                {
-                    Console.WriteLine($"User's role was updated to {(role)role}");
-                }
-
-                command.CommandText = "UNLOCK TABLES";
-                command.ExecuteNonQuery();
-            }
-            catch (Exception ex)
+            MySqlParameter Role = new MySqlParameter
             {
-                Console.WriteLine(ex.Message);
-            }
+                ParameterName = "Role",
+                Value = role
+            };
+            command.Parameters.Add(Role);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Update role command status: {0}", 
+                (result_code)(int)command.Parameters["Result"].Value);
         }
 
         private static void UnBlockUser(string login)
         {
-            try
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "UnblockUser";
+            MySqlParameter Login = new MySqlParameter
             {
-                MySqlCommand command = new MySqlCommand("LOCK TABLES client WRITE", currentConnection);
-                command.ExecuteNonQuery();
-                command.CommandText = "UPDATE client SET `status_id` = @uS WHERE `login` = @uL";
-                command.Parameters.Add("@uL", MySqlDbType.VarChar).Value = login;
-                command.Parameters.Add("@uS", MySqlDbType.Int16).Value = (int)status.Active;
-                command.ExecuteNonQuery();
-                Console.WriteLine($"User's status was changed to `{status.Active}`");
-                command.CommandText = "UNLOCK TABLES";
-                command.ExecuteNonQuery();
-            }
-            catch (Exception ex)
+                ParameterName = "Login",
+                Value = login
+            };
+            command.Parameters.Add(Login);
+
+            MySqlParameter Result = new MySqlParameter
             {
-                Console.WriteLine(ex.Message);
-                return;
-            }
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Unblock command status: {0}", (result_code)(int)command.Parameters["Result"].Value);
+
         }
 
         private static void AvailableCommands()
@@ -609,6 +1375,123 @@ namespace CarSharingORMApp
         private static void UnLogging()
         {
             currentUser = new UnregistredUser();
+        }
+
+        private static void ShowSalesStat ()
+        {
+            Console.Write("  year: ");
+            int year = int.Parse(Console.ReadLine());
+            Console.Write("  month: ");
+            int month = int.Parse(Console.ReadLine());
+            Console.Write("  start day: ");
+            int startDay = int.Parse(Console.ReadLine());
+            Console.Write("  end day: ");
+            int endDay = int.Parse(Console.ReadLine());
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "ShowSalesStat";
+            MySqlParameter Year = new MySqlParameter
+            {
+                ParameterName = "StatYear",
+                Value = year,
+                MySqlDbType = MySqlDbType.Int32
+            };
+            command.Parameters.Add(Year);
+            MySqlParameter StatMonth = new MySqlParameter
+            {
+                ParameterName = "StatMonth",
+                Value = month,
+                MySqlDbType = MySqlDbType.Int32
+            };
+            command.Parameters.Add(StatMonth);
+            MySqlParameter StartDay = new MySqlParameter
+            {
+                ParameterName = "StartDay",
+                Value = startDay,
+                MySqlDbType = MySqlDbType.Int32
+            };
+            command.Parameters.Add(StartDay);
+            MySqlParameter EndDay = new MySqlParameter
+            {
+                ParameterName = "EndDay",
+                Value = endDay,
+                MySqlDbType = MySqlDbType.Int32
+            };
+            command.Parameters.Add(EndDay);
+            DataTable table = new DataTable();
+            MySqlDataAdapter adapter = new MySqlDataAdapter();
+            adapter.SelectCommand = command;
+            adapter.Fill(table);
+            List<string> columns = new List<string>();
+            foreach (DataColumn column in table.Columns)
+            {
+                columns.Add(column.ColumnName);
+            }
+            var consoleTable = new ConsoleTable(columns.ToArray());
+            foreach (DataRow row in table.Rows)
+            {
+                consoleTable.AddRow(row.ItemArray);
+            }
+            Console.WriteLine();
+            consoleTable.Write(Format.Alternative);
+            Console.WriteLine("- Sales count: {0}", consoleTable.Rows.Count);
+        }
+
+        private static void BookCar()
+        {
+            Console.Write("  product name: ");
+            string productName = Console.ReadLine();
+            Console.Write("  start date: ");
+            DateTime startDate = DateTime.Parse(Console.ReadLine());
+            Console.Write("  end date: ");
+            DateTime endDate = DateTime.Parse(Console.ReadLine());
+
+            var command = currentConnection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "BookCar";
+
+            MySqlParameter ProductName = new MySqlParameter
+            {
+                ParameterName = "ProductName",
+                Value = productName
+            };
+            command.Parameters.Add(ProductName);
+
+            MySqlParameter StartDate = new MySqlParameter
+            {
+                ParameterName = "StartDate",
+                MySqlDbType = MySqlDbType.DateTime,
+                Value = startDate
+            };
+            command.Parameters.Add(StartDate);
+
+            MySqlParameter EndDate = new MySqlParameter
+            {
+                ParameterName = "EndDate",
+                MySqlDbType = MySqlDbType.DateTime,
+                Value = endDate
+            };
+            command.Parameters.Add(EndDate);
+
+            MySqlParameter ClientId = new MySqlParameter
+            {
+                ParameterName = "ClientId",
+                MySqlDbType = MySqlDbType.Int32,
+                Value = ((Admin)currentUser).Id
+            };
+            command.Parameters.Add(ClientId);
+
+            MySqlParameter Result = new MySqlParameter
+            {
+                ParameterName = "Result",
+                MySqlDbType = MySqlDbType.Int32,
+            };
+            Result.Direction = ParameterDirection.Output;
+            command.Parameters.Add(Result);
+
+            command.ExecuteNonQuery();
+            Console.WriteLine("- Book car command status: {0}",
+                (result_code)(int)command.Parameters["Result"].Value);
         }
 
         private static void HandleCommand(string command)
@@ -655,19 +1538,7 @@ namespace CarSharingORMApp
                 }
                 if (string.Compare(splittedCommand[0], "updaterole", true) == 0 && currentUser is Admin)
                 {
-                    switch (splittedCommand[2])
-                    {
-                        case "operator":
-                            UpdateRole(splittedCommand[1], (int)role.Operator);
-                            break;
-                        case "admin":
-                            UpdateRole(splittedCommand[1], (int)role.Admin);
-                            break;
-                        case "user":
-                            UpdateRole(splittedCommand[1], (int)role.User);
-                            break;
-                        default: break;
-                    }
+                    UpdateRole(splittedCommand[1], splittedCommand[2]);
                 }
                 if (string.Compare(splittedCommand[0], "find", true) == 0 && currentUser is Admin)
                 {
@@ -682,10 +1553,158 @@ namespace CarSharingORMApp
                     Restore(splittedCommand[1]);
 
                 }
+                if (string.Compare(splittedCommand[0], "bookcar", true) == 0)
+                {
+                    BookCar();
+
+                }
+                if (string.Compare(splittedCommand[0], "updatetarif", true) == 0 && currentUser is Admin)
+                {
+                    StringBuilder builder = new StringBuilder();
+                    for (int i = 1; i < splittedCommand.Length; i++)
+                    {
+                        builder.Append(" ");
+                        builder.Append(splittedCommand[i]);
+                    }
+                    UpdateTarif(builder.ToString().Trim());
+                }
+
+                if (string.Compare(splittedCommand[0], "add", true) == 0 && currentUser is Admin)
+                {
+                    if (string.Compare(splittedCommand[1], "car", true) == 0)
+                    {
+                        AddCar();
+                    }
+                    if (string.Compare(splittedCommand[1], "bank", true) == 0)
+                    {
+                        AddBank();
+                    }
+                    if (string.Compare(splittedCommand[1], "company", true) == 0)
+                    {
+                        AddCompany();
+                    }
+                    if (string.Compare(splittedCommand[1], "bankaccount", true) == 0)
+                    {
+                        AddBankAccount();
+                    }
+                    if (string.Compare(splittedCommand[1], "product", true) == 0)
+                    {
+                        AddProduct();
+                    }
+                    if (string.Compare(splittedCommand[1], "tarif", true) == 0)
+                    {
+                        AddTarif();
+                    }
+                }
+
+                if (string.Compare(splittedCommand[0], "update", true) == 0 && currentUser is Admin)
+                {
+                    if (string.Compare(splittedCommand[1], "car", true) == 0)
+                    {
+                        StringBuilder builder = new StringBuilder();
+                        for (int i = 2; i < splittedCommand.Length; i++)
+                        {
+                            builder.Append(" ");
+                            builder.Append(splittedCommand[i]);
+                        }
+                        UpdateCar(builder.ToString().Trim());
+                    }
+                    if (string.Compare(splittedCommand[1], "bank", true) == 0)
+                    {
+                        StringBuilder builder = new StringBuilder();
+                        for (int i = 2; i < splittedCommand.Length; i++)
+                        {
+                            builder.Append(" ");
+                            builder.Append(splittedCommand[i]);
+                        }
+                        UpdateBank(builder.ToString().Trim());
+                    }
+                    if (string.Compare(splittedCommand[1], "company", true) == 0)
+                    {
+                        StringBuilder builder = new StringBuilder();
+                        for (int i = 2; i < splittedCommand.Length; i++)
+                        {
+                            builder.Append(" ");
+                            builder.Append(splittedCommand[i]);
+                        }
+                        UpdateCompany(builder.ToString().Trim());
+                    }
+
+                    if (string.Compare(splittedCommand[1], "user", true) == 0)
+                    {
+                        StringBuilder builder = new StringBuilder();
+                        for (int i = 2; i < splittedCommand.Length; i++)
+                        {
+                            builder.Append(" ");
+                            builder.Append(splittedCommand[i]);
+                        }
+                        UpdateUser(builder.ToString().Trim());
+                    }
+                    if (string.Compare(splittedCommand[1], "role", true) == 0)
+                    {
+                        UpdateRole(splittedCommand[2], splittedCommand[3]);
+                    }
+                    if (string.Compare(splittedCommand[1], "tarif", true) == 0)
+                    {
+                        StringBuilder builder = new StringBuilder();
+                        for (int i = 2; i < splittedCommand.Length; i++)
+                        {
+                            builder.Append(" ");
+                            builder.Append(splittedCommand[i]);
+                        }
+                        UpdateTarif(builder.ToString().Trim());
+                    }
+
+
+                }
+
+                if (string.Compare(splittedCommand[0], "show", true) == 0 && currentUser is Admin)
+                {
+                    if (string.Compare(splittedCommand[1], "cars", true) == 0)
+                    {
+                        if (string.Compare(splittedCommand[2], string.Empty, true) == 0)
+                        {
+                            ShowCars();
+                        }
+                        if (string.Compare(splittedCommand[2], "model", true) == 0)
+                        {
+                            ShowCarsModel();
+                        }
+                        if (string.Compare(splittedCommand[2], "state", true) == 0)
+                        {
+                            ShowCarsState();
+                        }
+                        
+                    }
+                    if (string.Compare(splittedCommand[1], "products", true) == 0)
+                    {
+                        string result = null;
+                        if (splittedCommand.Length == 3)
+                            result = splittedCommand[2];
+                        ShowProducts(result);
+                    }
+                    if (string.Compare(splittedCommand[1], "companies", true) == 0)
+                    {
+                        ShowCompanies();
+                    }
+                    if (string.Compare(splittedCommand[1], "clientstatus", true) == 0)
+                    {
+                        ShowClient(splittedCommand[2]);
+                    }
+                    if (string.Compare(splittedCommand[1], "clients", true) == 0)
+                    {
+                        ShowClients();
+                    }
+                    if (string.Compare(splittedCommand[1], "sales", true) == 0)
+                    {
+                        ShowSalesStat();
+                    }
+
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine("- " + ex.Message);
             }
 
         }
